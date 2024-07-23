@@ -16,69 +16,51 @@ drawing = False
 
 pytesseract.pytesseract.tesseract_cmd = '/opt/homebrew/bin/tesseract'
 
-def morp_image(image):
-    kernel = np.ones((5,5),np.uint8)
-    morphed = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel, iterations= 3)
-    return morphed
-
-def preprocess_image(image):
-    """Convert image to grayscale and apply Gaussian blur."""
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (17, 17), 0)
-    return gray, blurred
+def detect_text(image):
+    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    results = pytesseract.image_to_data(rgb, output_type = pytesseract.Output.DICT, lang = "tur")
+    #text = pytesseract.image_to_string(Image.fromarray(img1))
+    #print(text)
 
 
-def detect_edges(blurred):
-    """Apply Canny edge detection."""
-    edged = cv2.Canny(blurred, 30, 150)
-    return edged
-
-
-
-def detect_thresholds(blurred):
-    thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-    return thresh
-
-
-
-def find_document_contour(edged):
-    """Find the contour of the document."""
-    contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)
-
-    return contours
-
-    for contour in contours:
-        peri = cv2.arcLength(contour, True)
-        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+    for i in range(0, len(results["text"])): 
+        # We can then extract the bounding box coordinates 
+        # of the text region from  the current result 
+        x = results["left"][i] 
+        y = results["top"][i] 
+        w = results["width"][i] 
+        h = results["height"][i] 
         
-        if len(approx) == 4:
-            return approx
-    return None
+        # We will also extract the OCR text itself along 
+        # with the confidence of the text localization 
+        text = results["text"][i] 
+        conf = int(results["conf"][i]) 
+        
+        # filter out weak confidence text localizations 
+        if conf > min_conf: 
+            
+            # We will display the confidence and text to 
+            # our terminal 
+            print("Confidence: {}".format(conf)) 
+            print("Text: {}".format(text)) 
+            print("") 
+            
+            # We then strip out non-ASCII text so we can 
+            # draw the text on the image We will be using 
+            # OpenCV, then draw a bounding box around the 
+            # text along with the text itself 
+            text = "".join(text).strip() 
+            cv2.rectangle(image, 
+                        (x, y), 
+                        (x + w, y + h), 
+                        (0, 0, 255), 2) 
+            cv2.putText(image, 
+                        text, 
+                        (x, y - 10),  
+                        cv2.FONT_HERSHEY_SIMPLEX, 
+                        1.2, (0, 255, 255), 3) 
 
-
-
-
-
-def apply_perspective_transform(image, contour):
-    """Apply a perspective transform to get a top-down view of the document."""
-    rect = cv2.boundingRect(contour)
-    x, y, w, h = rect
-    cropped_image = image[y:y+h, x:x+w]
-    
-    # Create a mask
-    mask = np.zeros_like(image)
-    cv2.drawContours(mask, [contour], -1, (255, 255, 255), -1)
-    mask = cv2.bitwise_and(image, mask)
-    
-    # Get perspective transformation
-    pts1 = np.float32([pt[0] for pt in contour])
-    pts2 = np.float32([[0, 0], [w-1, 0], [w-1, h-1], [0, h-1]])
-    matrix = cv2.getPerspectiveTransform(pts1, pts2)
-    warped = cv2.warpPerspective(mask, matrix, (w, h))
-    
-    return warped
-
+    return image
 
 def overlay_image(image, overlay, position):
     """Overlay the resized image onto the background at the specified position."""
@@ -175,11 +157,11 @@ def main():
                 # Extract and display the selected area from the last frame
                 cropped_image = frame[y1:y2, x1:x2]
 
-                gray, blurred = preprocess_image(cropped_image)
-                threshold = detect_thresholds(gray)
-
-                cropped_image = threshold
-                #contours = find_document_contour(edged)
+                ret,thresh1 = cv2.threshold(cropped_image,120,255,cv2.THRESH_BINARY)
+                text = str(pytesseract.image_to_string(thresh1, config='--psm 6', lang='tur'))
+                print(text)
+                
+                #cropped_image = detect_text(cropped_image)
                 
 
 
@@ -200,21 +182,6 @@ def main():
 
             clone[x:x+h, y:y+w] = resized_overlay[:h, :w]
 
-                
-
-        #morphed = morp_image(img)
-        #gray, blurred = preprocess_image(img)
-        
-        #edged = detect_edges(morphed)
-        #threshold = detect_thresholds(morphed)
-
-        #contours = find_document_contour(edged)
-        
-        #for contour in contours:
-        #    x,y,w,h = cv2.boundingRect(contour)
-        #    cv2.rectangle(img, (x, y), (x + w, y + h), (36,255,12), 2)
-
-        #warped = img
 
         # Display the frame
         cv2.imshow("Cyberclops", clone)
