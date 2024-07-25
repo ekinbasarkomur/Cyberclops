@@ -1,3 +1,4 @@
+#!/Users/ekinbasarkomur/projects/Pine-Scripts/Cyberclops/venv/bin/python3
 import numpy as np
 import cv2
 import datetime
